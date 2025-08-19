@@ -32,16 +32,6 @@ Follow the platform-specific setup instructions:
 
 This section describes practical options for loading the OMOP Common Data Model (CDM) into an InterSystems IRIS instance and performing Achilles analyses on it.
 
-__Note!__<br>
-Before proceeding with next steps apply temporary patch ([until the upstream PR is merged](https://github.com/intersystems-community/OHDSI-SqlRender/commit/0c6f068755083f9ec7479ed5038e5bcc0cc3d354)) — download and replace replacementPatterns.csv in the HADES container:
- ```
-# find the container ID of ohdsi/broadsea-hades 
-docker ps
-
-# Copy the file to the container. Specify the path to the file you downloaded from the PR and container_id
-docker cp "/your_path/to/replacementPatterns.csv" <container_id>:/usr/local/lib/R/site-library/SqlRender/csv/replacementPatterns.csv
-```
-
 ### Re-run Achilles on the same dataset in the current result schema
 Refreshes the analysis results without changing the schema.
 
