@@ -37,67 +37,127 @@ Refreshes the analysis results without changing the schema.
 
 1. Clean up the results schema in IRIS - remove all previously generated tables<br>
 
-    _"OMOPCDM55_RESULTS" - resultSchema for preloaded Achilles analysis results on the Eunomia dataset_<br>
-2. Run the commands in RStudio:
-
 ```
-library(DatabaseConnector)
-library(CommonDataModel)
+# --- Initializing the schema ---
+resultsSchema <- "OMOPCDM55_RESULTS"              # analysis results on the preloaded Eunomia test dataset
 
 # --- Connection ---
+library(DatabaseConnector)
 connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = "iris", server = "host.docker.internal", user = "_SYSTEM", password = "_SYSTEM", pathToDriver = "/opt/hades/jdbc_drivers")
+conn <- DatabaseConnector::connect(connectionDetails)
 
+# --- Deleting all tables in schema ---
+tables <- querySql(conn, sprintf("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s';", resultsSchema))
+
+for (tableName in tables$TABLE_NAME) {
+  sql <- sprintf('DROP TABLE "%s"."%s";', resultsSchema, tableName)
+  message("Dropping table: ", tableName)
+  executeSql(conn, sql)
+}
+```
+2. Delete all logs and error reports in RStudio
+
+3. Delete Atlas сache and restart WebAPI:
+
+```
+docker exec -it broadsea-atlasdb psql -U postgres -c "DELETE FROM webapi.achilles_cache WHERE source_id=2;"
+docker exec -it broadsea-atlasdb psql -U postgres -c "DELETE FROM webapi.cdm_cache      WHERE source_id=2;"
+docker restart ohdsi-webapi
+```
+
+4. Run the commands in RStudio:
+
+```
+# --- Temporary step, should be done in the preconfigured container
+remotes::install_github("OHDSI/SqlRender") 
+packageVersion("SqlRender") # v1.19.3
+
+# --- Initializing the schemas
 cdmSchema     <- "OMOPCDM53"           # preloaded Eunomia test dataset  
 resultsSchema <- "OMOPCDM55_RESULTS"   # analysis results on the preloaded Eunomia test dataset 
-cdmVersion    <- "5.3"               
+cdmVersion    <- "5.3"    
 
-# --- Ensure schemas exist, if no - create test table to create schema---
+# --- Connection ---
+library(DatabaseConnector)
+connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = "iris", server = "host.docker.internal", user = "_SYSTEM", password = "_SYSTEM", pathToDriver = "/opt/hades/jdbc_drivers")
 conn <- DatabaseConnector::connect(connectionDetails)
-sql <- sprintf("CREATE SCHEMA IF NOT EXISTS %s; CREATE TABLE IF NOT EXISTS %s.test_table (id INT PRIMARY KEY, name VARCHAR(255));", resultsSchema, resultsSchema)
-DatabaseConnector::executeSql(conn, sql)
-DatabaseConnector::disconnect(conn)
+          
+# --- Ensure schema exists 
+executeSql(conn, sprintf("CREATE SCHEMA IF NOT EXISTS %s;", resultsSchema))
 
-# Create Achilles results tables (empty)
-if (!requireNamespace("Achilles", quietly = TRUE)) {remotes::install_github("OHDSI/Achilles")}
+# --- Run Achilles
 library(Achilles)
-if ("createResultTables" %in% getNamespaceExports("Achilles")) {
-  Achilles::createResultTables(
-    connectionDetails       = connectionDetails,
-    resultsDatabaseSchema   = resultsSchema
+achilles(
+   connectionDetails       = connectionDetails,
+   cdmDatabaseSchema       = cdmSchema,
+   resultsDatabaseSchema   = resultsSchema,
+   cdmVersion              = cdmVersion,
+   createTable             = TRUE,
+   numThreads              = 1,
+   smallCellCount          = 5,
+   scratchDatabaseSchema   = resultsSchema,      
+   tempEmulationSchema     = resultsSchema,       
+   optimizeAtlasCache      = TRUE
   )
-} else {
-  Achilles::achilles(
-    connectionDetails       = connectionDetails,
-    cdmDatabaseSchema       = cdmSchema,
-    resultsDatabaseSchema   = resultsSchema,
-    vocabDatabaseSchema     = cdmSchema,  
-    cdmVersion              = cdmVersion,
-    createTable             = TRUE,
-    numThreads              = 2,
-    smallCellCount          = 0,
-    sqlOnly                 = FALSE
-  )
-}
+```
+
+5. Create table __concept_hierarchy__ in Result schema if it wasn't created during Achilles run
+
+```
+# --- Create table
+createTableSql <- sprintf(
+  '
+  CREATE TABLE "%s"."concept_hierarchy" (
+      concept_id INT,
+      concept_name VARCHAR(255),
+      treemap VARCHAR(255),
+      concept_hierarchy_type VARCHAR(50),
+      level1_concept_name VARCHAR(255),
+      level2_concept_name VARCHAR(255),
+      level3_concept_name VARCHAR(255),
+      level4_concept_name VARCHAR(255)
+  );
+  ',
+  resultsSchema
+)
+executeSql(conn, createTableSql)
+
+# --- Populate table
+insertSql <- sprintf(
+  '
+  INSERT INTO "%s"."concept_hierarchy"
+  SELECT
+      concept_id,
+      concept_name,
+      domain_id AS treemap,
+      ''DOMAIN_ONLY'' AS concept_hierarchy_type,
+      domain_id AS level1_concept_name,
+      NULL AS level2_concept_name,
+      NULL AS level3_concept_name,
+      NULL AS level4_concept_name
+  FROM "%s"."concept";
+  ',
+  resultsSchema,
+  cdmSchema
+)
+executeSql(conn, insertSql)
 ```
 
 ### Re-run Achilles on the same dataset in the new result schema
 Useful for comparing results with previous runs.
 1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI)
-  * Create a new file named 200_populate_iris_source_daimon.sql and add the following SQL content.<br>
-Be sure to replace **%LOGIN%** and **%PASSWORD%** with your actual IRIS credentials:  
  ```
+docker exec -it broadsea-atlasdb psql -U postgres -c "
 INSERT INTO webapi.source(source_id, source_name, source_key, source_connection, source_dialect)
-VALUES (3, 'my-iris-new', 'IRIS', 'jdbc:IRIS://host.docker.internal:1972/USER?user=%LOGIN%&password=%PASSWORD%', 'iris');                         # 'my-iris-new' - name of the new analysis in Atlas
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM53', 0);          # preloaded Eunomia test dataset  
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (8, 3, 1, 'OMOPCDM53', 10);         # preloaded Eunomia test dataset  
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM53_RESULTS', 0);  # new resultSchema
+VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                        # 'my-iris-new' - name of the new analysis in Atlas
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM53', 0);          # preloaded Eunomia test dataset 
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (8, 3, 1, 'OMOPCDM53', 10);         # preloaded Eunomia test dataset
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM53_RESULTS', 0);  # new resultSchema "
+docker restart ohdsi-webapi
 ```
-  * Loading 200_populate_iris_source_daimon.sql into the database:
-```
-docker cp 200_populate_iris_source_daimon.sql broadsea-atlasdb:/docker-entrypoint-initdb.d/200_populate_iris_source_daimon.sql
-docker exec -it broadsea-atlasdb psql -U postgres -f "/docker-entrypoint-initdb.d/200_populate_iris_source_daimon.sql"
-```
-2. Run the same [commands in RStudio](2.-Run-the-commands-in-RStudio) described previously, updating __resultSchema__ beforehand:
+2. Delete all logs and error reports in RStudio
+ 
+3. Run the same [step 4](4.-Run-the-commands-in-RStudio) and [step 5](5.-Create-table-concept_hierarchy)  described previously, updating __resultSchema__ beforehand:
 ```
 resultsSchema <- "OMOPCDM53_RESULTS"  # new results schema
 ```
@@ -110,21 +170,24 @@ Import new CDM data and updated vocabularies, then run Achilles to generate fres
    Before any rows can be inserted, the target database must expose the full set of OMOP tables, constraints, and indexes:
 
 ```
-library(DatabaseConnector)
-library(CommonDataModel)
+# --- Temporary step, should be done in the preconfigured container
+remotes::install_github("OHDSI/SqlRender") 
+packageVersion("SqlRender") # v1.19.3
 
-# --- Connection ---
-connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = "iris", server = "host.docker.internal", user = "_SYSTEM", password = "_SYSTEM", pathToDriver = "/opt/hades/jdbc_drivers")
-
+# --- Initializing the schemas
 cdmSchema     <- "OMOPCDM54"           # name of a new schema  
 resultsSchema <- "OMOPCDM54_RESULTS"   # name of a new resultSchema
 cdmVersion    <- "5.4"                 # version of your data
 
-# --- Ensure schemas exist, if no - create test table to create schema---
+library(DatabaseConnector)
+library(CommonDataModel)
+
+# --- Connection --- 
+connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = "iris", server = "host.docker.internal", user = "_SYSTEM", password = "_SYSTEM", pathToDriver = "/opt/hades/jdbc_drivers")
 conn <- DatabaseConnector::connect(connectionDetails)
-sql <- sprintf("CREATE SCHEMA IF NOT EXISTS %s; CREATE TABLE IF NOT EXISTS %s.test_table (id INT PRIMARY KEY, name VARCHAR(255));", cdmSchema, cdmSchema)
-DatabaseConnector::executeSql(conn, sql)
-DatabaseConnector::disconnect(conn)
+
+# --- Ensure schema exists 
+executeSql(conn, sprintf("CREATE SCHEMA IF NOT EXISTS %s;", cdmSchema))
 
 # --- Adaptive call to executeDdl() across package versions ---
 fargs <- names(formals(CommonDataModel::executeDdl))
@@ -159,31 +222,21 @@ Before loading the vocabularies into the database, you need to unzip the vocabul
 6. Run Achilles:
    
 ```
-# --- Ensure schemas exist, if no - create test table to create schema---
-conn <- DatabaseConnector::connect(connectionDetails)
-sql <- sprintf("CREATE SCHEMA IF NOT EXISTS %s; CREATE TABLE IF NOT EXISTS %s.test_table (id INT PRIMARY KEY, name VARCHAR(255));", resultsSchema, resultsSchema)
-DatabaseConnector::executeSql(conn, sql)
-DatabaseConnector::disconnect(conn)
+# --- Ensure schema exists 
+executeSql(conn, sprintf("CREATE SCHEMA IF NOT EXISTS %s;", resultsSchema))
 
-# Create Achilles results tables (empty)
-if (!requireNamespace("Achilles", quietly = TRUE)) {remotes::install_github("OHDSI/Achilles")}
+# --- Run Achilles
 library(Achilles)
-if ("createResultTables" %in% getNamespaceExports("Achilles")) {
-  Achilles::createResultTables(
-    connectionDetails       = connectionDetails,
-    resultsDatabaseSchema   = resultsSchema
+achilles(
+   connectionDetails       = connectionDetails,
+   cdmDatabaseSchema       = cdmSchema,
+   resultsDatabaseSchema   = resultsSchema,
+   cdmVersion              = cdmVersion,
+   createTable             = TRUE,
+   numThreads              = 1,
+   smallCellCount          = 5,
+   scratchDatabaseSchema   = resultsSchema,      
+   tempEmulationSchema     = resultsSchema,       
+   optimizeAtlasCache      = TRUE, # create achilles_result_concept_count
   )
-} else {
-  Achilles::achilles(
-    connectionDetails       = connectionDetails,
-    cdmDatabaseSchema       = cdmSchema,
-    resultsDatabaseSchema   = resultsSchema,
-    vocabDatabaseSchema     = cdmSchema,  
-    cdmVersion              = cdmVersion,
-    createTable             = TRUE,
-    numThreads              = 2,
-    smallCellCount          = 0,
-    sqlOnly                 = FALSE
-  )
-}
 ```
