@@ -35,8 +35,7 @@ This section describes practical options for loading the OMOP Common Data Model 
 ### Re-run Achilles on the same dataset in the current result schema
 Refreshes the analysis results without changing the schema.
 
-1. Clean up the results schema in IRIS - remove all previously generated tables<br>
-
+1. Clean up the results schema in IRIS - remove all previously generated tables:
 ```
 # --- Initializing the schema ---
 resultsSchema <- "OMOPCDM55_RESULTS"              # analysis results on the preloaded Eunomia test dataset
@@ -101,7 +100,7 @@ achilles(
   )
 ```
 
-5. Create table __concept_hierarchy__ in Result schema if it wasn't created during Achilles run
+5. Create table __concept_hierarchy__ in Result schema if it wasn't created during Achilles run:
 
 ```
 # --- Create table
@@ -157,14 +156,14 @@ docker restart ohdsi-webapi
 ```
 2. Delete all logs and error reports in RStudio
  
-3. Run the same [step 4](4.-Run-the-commands-in-RStudio) and [step 5](5.-Create-table-concept_hierarchy)  described previously, updating __resultSchema__ beforehand:
+3. Run the same [step 4](#run-the-commands-in-rstudio) and [step 5](#create-table-concept_hierarchy-in-result-schema-if-it-wasnt-created-during-Achilles-run)  described previously, updating __resultSchema__ beforehand:
 ```
 resultsSchema <- "OMOPCDM53_RESULTS"  # new results schema
 ```
 
 ### Load new data and run analyses
 Import new CDM data and updated vocabularies, then run Achilles to generate fresh results.
-1. [Register InterSystems IRIS](1.-Register-InterSystems-IRIS-as-a-new-data‑source-in-Postgres-(WebAPI)) as a new data‑source in Postgres (WebAPI) as describe previously, updating __cdmSchema__ and __resultsSchema__
+1. [Register InterSystems IRIS](#register-intersystems-iris-as-a-new-data-source-in-postgres-webapi) as a new data‑source in Postgres (WebAPI) as describe previously, updating __cdmSchema__ and __resultsSchema__
 2. Initializing the CDM Schema <br>
 
    Before any rows can be inserted, the target database must expose the full set of OMOP tables, constraints, and indexes:
