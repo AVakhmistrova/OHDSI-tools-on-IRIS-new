@@ -129,7 +129,7 @@ insertSql <- sprintf(
       concept_id,
       concept_name,
       domain_id AS treemap,
-      ''DOMAIN_ONLY'' AS concept_hierarchy_type,
+      \'DOMAIN_ONLY\' AS concept_hierarchy_type,
       domain_id AS level1_concept_name,
       NULL AS level2_concept_name,
       NULL AS level3_concept_name,
