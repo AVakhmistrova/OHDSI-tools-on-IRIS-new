@@ -144,17 +144,18 @@ executeSql(conn, insertSql)
 
 ### Re-run Achilles on the same dataset in the new result schema
 Useful for comparing results with previous runs.
-1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI)
+1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI):<br>
+   _'my-iris-new' - name of the new analysis in Atlas_
    
  ```
 docker exec -it broadsea-atlasdb psql -U postgres -c "
 DELETE FROM webapi.source_daimon WHERE source_daimon_id NOT IN (1, 2, 3, 4, 5, 6);
 DELETE FROM webapi.source WHERE source_id NOT IN (1, 2);
 INSERT INTO webapi.source(source_id, source_name, source_key, source_connection, source_dialect)
-VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                        # 'my-iris-new' - name of the new analysis in Atlas
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM53', 0);          # preloaded Eunomia test dataset 
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (8, 3, 1, 'OMOPCDM53', 10);         # preloaded Eunomia test dataset
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM53_RESULTS', 0);  # new resultSchema "
+VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                        
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM53', 0);          
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (8, 3, 1, 'OMOPCDM53', 10);         
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM53_RESULTS', 0);   "
 docker restart ohdsi-webapi
 ```
 
@@ -167,17 +168,18 @@ resultsSchema <- "OMOPCDM53_RESULTS"  # new results schema
 
 ### Load new data and run analyses
 Import new CDM data and updated vocabularies, then run Achilles to generate fresh results.
-1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI)
+1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI):<br>
+   _'my-iris-new' - name of the new analysis in Atlas_
    
  ```
 docker exec -it broadsea-atlasdb psql -U postgres -c "
 DELETE FROM webapi.source_daimon WHERE source_daimon_id NOT IN (1, 2, 3, 4, 5, 6);
 DELETE FROM webapi.source WHERE source_id NOT IN (1, 2);
 INSERT INTO webapi.source(source_id, source_name, source_key, source_connection, source_dialect)
-VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                        # 'my-iris-new' - name of the new analysis in Atlas
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM54', 0);          # name of a new schema 
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (8, 3, 1, 'OMOPCDM54', 10);         # name of a new schema
-INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM54_RESULTS', 0);  # new resultSchema "
+VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                       
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM54', 0);           
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (8, 3, 1, 'OMOPCDM54', 10);        
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM54_RESULTS', 0);"
 docker restart ohdsi-webapi
 ```
 
