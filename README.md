@@ -145,8 +145,11 @@ executeSql(conn, insertSql)
 ### Re-run Achilles on the same dataset in the new result schema
 Useful for comparing results with previous runs.
 1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI)
+   
  ```
 docker exec -it broadsea-atlasdb psql -U postgres -c "
+DELETE FROM webapi.source_daimon WHERE source_daimon_id NOT IN (1, 2, 3, 4, 5, 6);
+DELETE FROM webapi.source WHERE source_id NOT IN (1, 2);
 INSERT INTO webapi.source(source_id, source_name, source_key, source_connection, source_dialect)
 VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                        # 'my-iris-new' - name of the new analysis in Atlas
 INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM53', 0);          # preloaded Eunomia test dataset 
@@ -154,16 +157,30 @@ INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, tabl
 INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM53_RESULTS', 0);  # new resultSchema "
 docker restart ohdsi-webapi
 ```
+
 2. Delete all logs and error reports in RStudio
  
-3. Run the same [step 4](#run-the-commands-in-rstudio) and [step 5](#create-table-concept_hierarchy-in-result-schema-if-it-wasnt-created-during-Achilles-run)  described previously, updating __resultSchema__ beforehand:
+3. Run the same [steps 4 and 5](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema) described previously, updating __resultSchema__ beforehand:
 ```
 resultsSchema <- "OMOPCDM53_RESULTS"  # new results schema
 ```
 
 ### Load new data and run analyses
 Import new CDM data and updated vocabularies, then run Achilles to generate fresh results.
-1. [Register InterSystems IRIS](#register-intersystems-iris-as-a-new-data-source-in-postgres-webapi) as a new data‑source in Postgres (WebAPI) as describe previously, updating __cdmSchema__ and __resultsSchema__
+1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI)
+   
+ ```
+docker exec -it broadsea-atlasdb psql -U postgres -c "
+DELETE FROM webapi.source_daimon WHERE source_daimon_id NOT IN (1, 2, 3, 4, 5, 6);
+DELETE FROM webapi.source WHERE source_id NOT IN (1, 2);
+INSERT INTO webapi.source(source_id, source_name, source_key, source_connection, source_dialect)
+VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                        # 'my-iris-new' - name of the new analysis in Atlas
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM54', 0);          # name of a new schema 
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (8, 3, 1, 'OMOPCDM54', 10);         # name of a new schema
+INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM54_RESULTS', 0);  # new resultSchema "
+docker restart ohdsi-webapi
+```
+
 2. Initializing the CDM Schema <br>
 
    Before any rows can be inserted, the target database must expose the full set of OMOP tables, constraints, and indexes:
