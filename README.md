@@ -219,34 +219,12 @@ Depending on your dataset, you may need to download additional vocabularies from
 __Note__: The Community Edition cannot store the full Athena vocabulary set. In most cases the following are sufficient: Gender, Race, Ethnicity, SNOMED, LOINC, ICD10CM, ICD9CM, ICD9Proc, CPT4, HCPCS, NDC, RxNorm, RxNorm Extension.<br>
 The required core vocabularies (Domain, Relationship, Vocabulary, Concept Class, CDM, Type Concept, UCUM, Visit Type, Drug Type, Procedure Type, Condition Type, etc.) are included by default in every package.<br>
 Before loading into the database unzip the downloaded archive into a convenient directory inside the HADES container (this will be referred to as _vocabFileLoc_). <br>
-   1.
-```R
-# --- Temporary step, should be done in the preconfigured container ---
-install.packages("devtools")
-devtools::install_github("OHDSI/ETL-Synthea")
 
-# --- Load vocabularies into the CDM schema ---
-library(ETLSyntheaBuilder)
-vocabFileLoc <- "/home/rstudio/vocab"          # path to vocabulary CSV files inside the HADES container
-ETLSyntheaBuilder::LoadVocabFromCsv(connectionDetails, cdmSchema, vocabFileLoc)
-```
-2.
 ```R
 library(readr)
 library(tools)
-
-vocabFileLoc <- "/home/rstudio/vocab"     # path to vocabulary CSV files inside the HADES container
-vocabTables <- c(
-  "CONCEPT.csv",
-  "DOMAIN.csv",
-  "VOCABULARY.csv",
-  "CONCEPT_CLASS.csv",
-  "RELATIONSHIP.csv",
-  "CONCEPT_RELATIONSHIP.csv",
-  "CONCEPT_SYNONYM.csv",
-  "CONCEPT_ANCESTOR.csv",
-  "DRUG_STRENGTH.csv"
-)
+vocabFileLoc <- "/home/rstudio/vocab"    # path to vocabulary CSV files inside the HADES container
+vocabTables <- c(list.files("/home/rstudio/vocab")) 
 
 for (table in vocabTables) {
     message("Table: ", table)
