@@ -223,20 +223,28 @@ Before loading into the database unzip the downloaded archive into a convenient 
 ```R
 library(readr)
 library(tools)
+library(dplyr)
+library(stringr)
 vocabFileLoc <- "/home/rstudio/vocab"    # path to vocabulary CSV files inside the HADES container
 vocabTables <- c(list.files("/home/rstudio/vocab")) 
 
 for (table in vocabTables) {
     message("Table: ", table)
   filepath <- file.path(vocabFileLoc, table)
-  df <- read_delim(filepath, delim = "\t", col_types = cols(.default = "c"))
+  df <- read_delim(filepath, delim = "\t", col_types = cols(.default = "c"))    # make sure to insert correct delimeter
+  # Identify and convert date columns (e.g., valid_start_date, etc.)
+  date_cols <- names(df)[str_detect(names(df), regex("date", ignore_case = TRUE))]
+  for (col in date_cols) {
+        df[[col]] <- as.Date(df[[col]], format = "%Y%m%d")
+  }
+  # Get table name without extension
   tableName <- file_path_sans_ext(table)
   DatabaseConnector::insertTable(
     connection = conn,
     tableName = paste0(cdmSchema, ".", tableName),
     data = df,
-    dropTableIfExists = TRUE,
-    createTable = TRUE,
+    dropTableIfExists = FALSE,
+    createTable = FALSE,
     tempTable = FALSE
   )
 }
