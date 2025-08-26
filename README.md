@@ -12,10 +12,9 @@ It is intended for engineers and data scientists who need a reproducible setup o
 
 
 ## Running InterSystems IRIS for Health, deploying OHDSI Broadsea and connecting to InterSystems IRIS
-![OHDSI Broadsea](OHDSI_Broadsea.png)
-*Fig. 1. OHDSI Broadsea Deployment Architecture*
-
 This section provides links for the __automated installation__ of the full OHDSI tool-chain (ATLAS, WebAPI, HADES, etc.) using the official [Broadsea repository](https://www.ohdsi.org/wp-content/uploads/2023/10/Londhe-Ajit_Broadsea-3.0-BROADening-the-ohdSEA_2023symposium-Ajit-Londhe.pdf).  
+![OHDSI Broadsea](OHDSI_Broadsea.png)*Fig. 1. OHDSI Broadsea Deployment Architecture*<br>
+
 The deployment is preconfigured to integrate with InterSystems IRIS for Health.
 After completing the setup, you will have:
 * A running __IRIS instance__ with the __Eunomia__ test OMOP CDM and vocabularies preloaded
@@ -27,24 +26,36 @@ Follow the platform-specific setup instructions:
 * [macOS (Apple Silicon)](https://github.com/dwellbrock/ohdsi-iris-macos-env/)
 * macOS (Intel) - _in develoment_
 * Windows - _in development_
+* Linux - _in development_
+-----
 
 ## Loading Data into InterSystems IRIS and Running Analysis
-
-This section describes practical options for loading the OMOP Common Data Model (CDM) into an InterSystems IRIS instance and performing Achilles analyses on it.
+This section describes practical options for loading the OMOP Common Data Model (CDM) into an InterSystems IRIS instance and performing Achilles analyses on it:
+* [re-run analysis in the current result schema](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema) - refresh analysis results without changing the schema
+* [re-run analysis in a new result schema](#re-run-achilles-on-the-same-dataset-in-the-new-result-schema) - useful for comparing results with previous runs
+* [load new data and run new analysis](#load-new-data-and-run-analyses) - import updated CDM data and vocabularies, then generate fresh Achilles results
 
 ### Re-run Achilles on the same dataset in the current result schema
-Refreshes the analysis results without changing the schema.
+Re-run Achilles on the existing dataset to __refresh the analysis results__ while keeping the same result schema unchanged.
 
-1. Clean up the results schema in IRIS - remove all previously generated tables:
-```
-# --- Initializing the schema ---
-resultsSchema <- "OMOPCDM55_RESULTS"              # analysis results on the preloaded Eunomia test dataset
 
+1. Set up IRIS connection and initialize schemas: <br>
+_(run the commands in RStudio)_
+```R
 # --- Connection ---
 library(DatabaseConnector)
 connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = "iris", server = "host.docker.internal", user = "_SYSTEM", password = "_SYSTEM", pathToDriver = "/opt/hades/jdbc_drivers")
 conn <- DatabaseConnector::connect(connectionDetails)
 
+# --- Initializing the schemas ---
+cdmSchema     <- "OMOPCDM53"           # schema with CDM data (e.g., preloaded Eunomia test dataset)
+resultsSchema <- "OMOPCDM55_RESULTS"   # schema for Achilles results (e.g., Eunomia analysis results)
+cdmVersion    <- "5.3"                 # CDM version (e.g., 5.3 for Eunomia)
+```
+   
+2. Clean up the result schema in IRIS - remove all previously generated tables: <br>
+_(run the commands in RStudio)_
+```R
 # --- Deleting all tables in schema ---
 tables <- querySql(conn, sprintf("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s';", resultsSchema))
 
@@ -54,37 +65,32 @@ for (tableName in tables$TABLE_NAME) {
   executeSql(conn, sql)
 }
 ```
-2. Delete all logs and error reports in RStudio
+3. Delete all logs and error reports in RStudio.
 
-3. Delete Atlas сache and restart WebAPI:
+4. Delete Atlas сache and restart WebAPI: <br>
+_(run the comands in Terminal)_
 
-```
+```sch
 docker exec -it broadsea-atlasdb psql -U postgres -c "DELETE FROM webapi.achilles_cache WHERE source_id=2;"
 docker exec -it broadsea-atlasdb psql -U postgres -c "DELETE FROM webapi.cdm_cache      WHERE source_id=2;"
 docker restart ohdsi-webapi
 ```
-
-4. Run the commands in RStudio:
-
+_where:_ 
+```R
+# source_id = 2  -  ID of the preloaded Eunomia analysis results in Atlas
 ```
-# --- Temporary step, should be done in the preconfigured container
+
+4. Run Achilles: <br>
+_(run the commands in RStudio)_
+```R
+# --- Temporary step, should be done in the preconfigured container ---
 remotes::install_github("OHDSI/SqlRender") 
 packageVersion("SqlRender") # v1.19.3
-
-# --- Initializing the schemas
-cdmSchema     <- "OMOPCDM53"           # preloaded Eunomia test dataset  
-resultsSchema <- "OMOPCDM55_RESULTS"   # analysis results on the preloaded Eunomia test dataset 
-cdmVersion    <- "5.3"    
-
-# --- Connection ---
-library(DatabaseConnector)
-connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = "iris", server = "host.docker.internal", user = "_SYSTEM", password = "_SYSTEM", pathToDriver = "/opt/hades/jdbc_drivers")
-conn <- DatabaseConnector::connect(connectionDetails)
           
-# --- Ensure schema exists 
+# --- Ensure schema exists ---
 executeSql(conn, sprintf("CREATE SCHEMA IF NOT EXISTS %s;", resultsSchema))
 
-# --- Run Achilles
+# --- Run Achilles ---
 library(Achilles)
 achilles(
    connectionDetails       = connectionDetails,
@@ -100,57 +106,33 @@ achilles(
   )
 ```
 
-5. Create table __concept_hierarchy__ in Result schema if it wasn't created during Achilles run:
-
-```
-# --- Create table
+5. Create table _concept_hierarchy_ in Result schema if it wasn't created during Achilles run: <br>
+_(run the commands in RStudio)_
+```R
+# --- Create table ---
 createTableSql <- sprintf(
   '
-  CREATE TABLE "%s"."concept_hierarchy" (
-      concept_id INT,
-      concept_name VARCHAR(255),
-      treemap VARCHAR(255),
-      concept_hierarchy_type VARCHAR(50),
-      level1_concept_name VARCHAR(255),
-      level2_concept_name VARCHAR(255),
-      level3_concept_name VARCHAR(255),
-      level4_concept_name VARCHAR(255)
-  );
-  ',
-  resultsSchema
+  CREATE TABLE "%s"."concept_hierarchy" (concept_id INT, concept_name VARCHAR(255), treemap VARCHAR(255), concept_hierarchy_type VARCHAR(50), level1_concept_name VARCHAR(255), level2_concept_name VARCHAR(255), level3_concept_name VARCHAR(255), level4_concept_name VARCHAR(255));
+  ', resultsSchema
 )
 executeSql(conn, createTableSql)
 
-# --- Populate table
+# --- Populate table ---
 insertSql <- sprintf(
   '
   INSERT INTO "%s"."concept_hierarchy"
-  SELECT
-      concept_id,
-      concept_name,
-      domain_id AS treemap,
-      \'DOMAIN_ONLY\' AS concept_hierarchy_type,
-      domain_id AS level1_concept_name,
-      NULL AS level2_concept_name,
-      NULL AS level3_concept_name,
-      NULL AS level4_concept_name
-  FROM "%s"."concept";
-  ',
-  resultsSchema,
-  cdmSchema
+  SELECT concept_id, concept_name, domain_id AS treemap, \'DOMAIN_ONLY\' AS concept_hierarchy_type, domain_id AS level1_concept_name, NULL AS level2_concept_name, NULL AS level3_concept_name, NULL AS level4_concept_name FROM "%s"."concept";
+  ', resultsSchema, cdmSchema
 )
 executeSql(conn, insertSql)
 ```
 
 ### Re-run Achilles on the same dataset in the new result schema
-Useful for comparing results with previous runs.
-1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI):<br>
-   _'my-iris-new' - name of the new analysis in Atlas_
-   
- ```
+Run Achilles on the same dataset but write the results into a new result schema, making it possible __to compare outcomes__ with previous runs.
+1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI): <br>
+_(run the comands in Terminal)_ <br>
+ ```sch
 docker exec -it broadsea-atlasdb psql -U postgres -c "
-DELETE FROM webapi.source_daimon WHERE source_daimon_id NOT IN (1, 2, 3, 4, 5, 6);
-DELETE FROM webapi.source WHERE source_id NOT IN (1, 2);
 INSERT INTO webapi.source(source_id, source_name, source_key, source_connection, source_dialect)
 VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                        
 INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM53', 0);          
@@ -158,23 +140,27 @@ INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, tabl
 INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM53_RESULTS', 0);   "
 docker restart ohdsi-webapi
 ```
-
+_where:_  
+```R
+# source_id = 3       - ID of the new analysis in Atlas
+# 'my-iris-new'       - name of the new analysis in Atlas
+# 'OMOPCDM53'         - schema with CDM data (e.g., preloaded Eunomia test dataset)
+# 'OMOPCDM53_RESULTS' - new result schema
+```
 2. Delete all logs and error reports in RStudio
  
-3. Run the same [steps 4 and 5](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema) described previously, updating __resultSchema__ beforehand:
+3. Set up IRIS connection and initialize schemas as described in [step 1](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema), updating __resultSchema__ beforehand: <br>
+```R
+resultsSchema <- "OMOPCDM53_RESULTS"     # new result schema
 ```
-resultsSchema <- "OMOPCDM53_RESULTS"  # new results schema
-```
+4. Run Achilles and create table _concept_hierarchy_ as described in [steps 4-5](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema)
 
 ### Load new data and run analyses
-Import new CDM data and updated vocabularies, then run Achilles to generate fresh results.
-1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI):<br>
-   _'my-iris-new' - name of the new analysis in Atlas_
-   
- ```
+Import new CDM data and vocabularies into the database, then run Achilles to generate fresh analysis results.
+1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI): <br>
+_(run the comands in Terminal)_ <br>
+ ```sch
 docker exec -it broadsea-atlasdb psql -U postgres -c "
-DELETE FROM webapi.source_daimon WHERE source_daimon_id NOT IN (1, 2, 3, 4, 5, 6);
-DELETE FROM webapi.source WHERE source_id NOT IN (1, 2);
 INSERT INTO webapi.source(source_id, source_name, source_key, source_connection, source_dialect)
 VALUES (3, 'my-iris-new', 'IRIS-new', 'jdbc:IRIS://host.docker.internal:1972/USER?user=_SYSTEM&password=_SYSTEM', 'iris');                       
 INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (7, 3, 0, 'OMOPCDM54', 0);           
@@ -182,29 +168,28 @@ INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, tabl
 INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM54_RESULTS', 0);"
 docker restart ohdsi-webapi
 ```
-
-2. Initializing the CDM Schema <br>
-
-   Before any rows can be inserted, the target database must expose the full set of OMOP tables, constraints, and indexes:
-
+_where:_  
+```R
+# source_id = 3       - ID of the new analysis in Atlas
+# 'my-iris-new'       - name of the new analysis in Atlas
+# 'OMOPCDM54'         - new CDM schema
+# 'OMOPCDM54_RESULTS' - new result schema
 ```
-# --- Temporary step, should be done in the preconfigured container
-remotes::install_github("OHDSI/SqlRender") 
-packageVersion("SqlRender") # v1.19.3
 
-# --- Initializing the schemas
+2. Set up IRIS connection and initialize schemas as described in [step 1](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema), updating __cdm schema__ and  __result schema__ beforehand: <br>
+```R
 cdmSchema     <- "OMOPCDM54"           # name of a new schema  
 resultsSchema <- "OMOPCDM54_RESULTS"   # name of a new resultSchema
-cdmVersion    <- "5.4"                 # version of your data
+```
 
-library(DatabaseConnector)
+3. Create CDM tables and metadata. <br>
+
+Before data can be inserted, the target database must contain the full set of OMOP tables, constraints, and indexes:<br>
+_(run the commands in RStudio)_
+```R
 library(CommonDataModel)
 
-# --- Connection --- 
-connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = "iris", server = "host.docker.internal", user = "_SYSTEM", password = "_SYSTEM", pathToDriver = "/opt/hades/jdbc_drivers")
-conn <- DatabaseConnector::connect(connectionDetails)
-
-# --- Ensure schema exists 
+# --- Ensure schema exists ---
 executeSql(conn, sprintf("CREATE SCHEMA IF NOT EXISTS %s;", cdmSchema))
 
 # --- Adaptive call to executeDdl() across package versions ---
@@ -222,39 +207,33 @@ if ("createPrimaryKeys" %in% fargs) args$createPrimaryKeys <- TRUE
 do.call(CommonDataModel::executeDdl, args)
 ```
 
-3. Download vocabularies<br>
+4. Download vocabularies __(optional)__. <br>
 
-Depending on your dataset, you may need to download additional vocabularies separately. These can be obtained from the official OMOP vocabulary repository at [https://athena.ohdsi.org](https://athena.ohdsi.org). To do this, register or log in, go to the *“Download”* section (Fig. 4), select the vocabularies relevant to your use case, and generate a download package.
-![Hades](athena_download.png)
-The Community Edition cannot store the full Athena vocabulary set. The following vocabularies are typically sufficient: ICD10CM, ICD9CM, ICD9Proc, CPT4, HCPCS, NDC, RxNorm, RxNorm Extension, SNOMED, LOINC, Visit Type, Drug Type, Procedure Type, Condition Type, Observation Type, Death Type, Note Type, Measurement Type, Device Type, Cohort Type, Gender, Race, Ethnicity, Domain, Relationship, Vocabulary, Concept Class, CDM, Type Concept, UCUM.
-Before loading the vocabularies into the database, you need to unzip the vocabulary archive you received from Athena into a convenient directory on your local machine. This directory will be referred to as vocabPath in the code examples below. It should contain CSV files such as CONCEPT.csv, VOCABULARY.csv, RELATIONSHIP.csv, and others. Make sure the path you provide in the code matches the location of the unzipped files.
+Depending on your dataset, you may need to download additional vocabularies from the official [OMOP repository Athena](https://athena.ohdsi.org). To do this:
+  * Register or log in.
+  * Go to the "Download" section (see Fig. 2).
+  * Select the vocabularies relevant to your use case and generate a download package.
+
+     ![Hades](athena_download.png)*Fig. 2. Download vocabularies from Athena*<br>
+
+__Note__: The Community Edition cannot store the full Athena vocabulary set. In most cases the following are sufficient: Gender, Race, Ethnicity, SNOMED, LOINC, ICD10CM, ICD9CM, ICD9Proc, CPT4, HCPCS, NDC, RxNorm, RxNorm Extension.<br>
+The required core vocabularies (Domain, Relationship, Vocabulary, Concept Class, CDM, Type Concept, UCUM, Visit Type, Drug Type, Procedure Type, Condition Type, etc.) are included by default in every package.<br>
+Before loading into the database unzip the downloaded archive into a convenient directory inside the HADES container. (this will be referred to as _vocabFileLoc_).
+
+```R
+# --- Temporary step, should be done in the preconfigured container ---
+install.packages("devtools")
+devtools::install_github("OHDSI/ETL-Synthea")
+
+# --- Load vocabularies into the CDM schema ---
+library(ETLSyntheaBuilder)
+vocabFileLoc <- "/home/rstudio/vocab"          # path to vocabulary CSV files inside the HADES container
+ETLSyntheaBuilder::LoadVocabFromCsv(connectionDetails, cdmSchema, vocabFileLoc)
+```
+
+5. Download your CDM data.
 ```
 #code here
 ```
 
-5. Download your data
-```
-#code here
-```
-
-6. Run Achilles:
-   
-```
-# --- Ensure schema exists 
-executeSql(conn, sprintf("CREATE SCHEMA IF NOT EXISTS %s;", resultsSchema))
-
-# --- Run Achilles
-library(Achilles)
-achilles(
-   connectionDetails       = connectionDetails,
-   cdmDatabaseSchema       = cdmSchema,
-   resultsDatabaseSchema   = resultsSchema,
-   cdmVersion              = cdmVersion,
-   createTable             = TRUE,
-   numThreads              = 1,
-   smallCellCount          = 5,
-   scratchDatabaseSchema   = resultsSchema,      
-   tempEmulationSchema     = resultsSchema,       
-   optimizeAtlasCache      = TRUE, # create achilles_result_concept_count
-  )
-```
+6. Run Achilles and create table _concept_hierarchy_ as described in [steps 4-5](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema)
