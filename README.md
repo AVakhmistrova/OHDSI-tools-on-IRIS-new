@@ -131,7 +131,7 @@ executeSql(conn, insertSql)
    
 ### Re-run Achilles on the same dataset in the new result schema
 Run Achilles on the same dataset but write the results into a new result schema, making it possible __to compare outcomes__ with previous runs.
-1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI): <br>
+1. Register InterSystems IRIS new data‑source in Postgres (WebAPI): <br>
 _(run the comands in Terminal)_ <br>
  ```sch
 docker exec -it broadsea-atlasdb psql -U postgres -c "
@@ -160,7 +160,7 @@ resultsSchema <- "OMOPCDM53_RESULTS"     # new result schema
 
 ### Load new data and run analyses
 Import new CDM data and vocabularies into the database, then run Achilles to generate fresh analysis results.
-1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI): <br>
+1. Register InterSystems IRIS data‑source in Postgres (WebAPI): <br>
 _(run the comands in Terminal)_ <br>
  ```sch
 docker exec -it broadsea-atlasdb psql -U postgres -c "
