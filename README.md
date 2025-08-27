@@ -102,7 +102,8 @@ achilles(
    smallCellCount          = 5,
    scratchDatabaseSchema   = resultsSchema,      
    tempEmulationSchema     = resultsSchema,       
-   optimizeAtlasCache      = TRUE
+   optimizeAtlasCache      = TRUE,
+   excludeAnalysisIds      = 117                       # optional - skip analysis 117 to speed up the run; its results will be omitted
   )
 ```
 
