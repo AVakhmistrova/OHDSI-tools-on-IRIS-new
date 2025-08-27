@@ -33,7 +33,7 @@ Follow the platform-specific setup instructions:
 This section describes practical options for loading the OMOP Common Data Model (CDM) into an InterSystems IRIS instance and performing Achilles analyses on it:
 * [re-run analysis in the current result schema](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema) - refresh analysis results without changing the schema
 * [re-run analysis in a new result schema](#re-run-achilles-on-the-same-dataset-in-the-new-result-schema) - useful for comparing results with previous runs
-* [load new data and run new analysis](#load-new-data-and-run-analyses) - import updated CDM data and vocabularies, then generate fresh Achilles results
+* [load new data and run new analysis](#load-new-data-and-run-analyses) - import new CDM data and vocabularies, then generate fresh Achilles results
 
 ### Re-run Achilles on the same dataset in the current result schema
 Re-run Achilles on the existing dataset to __refresh the analysis results__ while keeping the same result schema unchanged.
@@ -126,7 +126,8 @@ insertSql <- sprintf(
 )
 executeSql(conn, insertSql)
 ```
-
+6. Open [Atlas](http://127.0.0.1/atlas) to view the analysis dashboards.
+   
 ### Re-run Achilles on the same dataset in the new result schema
 Run Achilles on the same dataset but write the results into a new result schema, making it possible __to compare outcomes__ with previous runs.
 1. Register InterSystems IRIS as a new data‑source in Postgres (WebAPI): <br>
@@ -153,7 +154,8 @@ _where:_
 ```R
 resultsSchema <- "OMOPCDM53_RESULTS"     # new result schema
 ```
-4. Run Achilles and create table _concept_hierarchy_ as described in [steps 4-5](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema)
+4. Run Achilles and create table _concept_hierarchy_ as described in [steps 4-5](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema).
+5. Open [Atlas](http://127.0.0.1/atlas) to view the analysis dashboards.
 
 ### Load new data and run analyses
 Import new CDM data and vocabularies into the database, then run Achilles to generate fresh analysis results.
@@ -175,14 +177,15 @@ _where:_
 # 'OMOPCDM54'         - new CDM schema
 # 'OMOPCDM54_RESULTS' - new result schema
 ```
-
-2. Set up IRIS connection and initialize schemas as described in [step 1](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema), updating __cdm schema__ and  __result schema__ beforehand: <br>
+2. Delete all logs and error reports in RStudio.
+   
+3. Set up IRIS connection and initialize schemas as described in [step 1](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema), updating __cdm schema__ and  __result schema__ beforehand: <br>
 ```R
 cdmSchema     <- "OMOPCDM54"           # name of a new schema  
 resultsSchema <- "OMOPCDM54_RESULTS"   # name of a new resultSchema
 ```
 
-3. Create CDM tables and metadata. <br>
+4. Create CDM tables and metadata. <br>
 
 Before data can be inserted, the target database must contain the full set of OMOP tables, constraints, and indexes:<br>
 _(run the commands in RStudio)_
@@ -192,22 +195,17 @@ library(CommonDataModel)
 # --- Ensure schema exists ---
 executeSql(conn, sprintf("CREATE SCHEMA IF NOT EXISTS %s;", cdmSchema))
 
-# --- Adaptive call to executeDdl() across package versions ---
-fargs <- names(formals(CommonDataModel::executeDdl))
-args  <- list(
-  connectionDetails   = connectionDetails,
-  cdmDatabaseSchema   = cdmSchema,
-  cdmVersion          = cdmVersion
+# --- ExecuteDdl without primary and foreign keys: insert data without constraint errors ---
+CommonDataModel::executeDdl(
+  connectionDetails = connectionDetails,
+  cdmDatabaseSchema = cdmSchema,
+  cdmVersion = cdmVersion, 
+  executePrimaryKey = FALSE,
+  executeForeignKey = FALSE
 )
-if ("createIndices" %in% fargs)  args$createIndices  <- TRUE
-if ("createIndexes" %in% fargs)  args$createIndexes  <- TRUE
-# Some package versions also accept these; harmless if ignored:
-if ("createConstraints" %in% fargs) args$createConstraints <- TRUE
-if ("createPrimaryKeys" %in% fargs) args$createPrimaryKeys <- TRUE
-do.call(CommonDataModel::executeDdl, args)
 ```
 
-4. Download vocabularies __(optional)__. <br>
+5. Download vocabularies __(optional)__. <br>
 
 Depending on your dataset, you may need to download additional vocabularies from the official [OMOP repository Athena](https://athena.ohdsi.org). To do this:
   * Register or log in.
@@ -218,41 +216,76 @@ Depending on your dataset, you may need to download additional vocabularies from
 
 __Note__: The Community Edition cannot store the full Athena vocabulary set. In most cases the following are sufficient: Gender, Race, Ethnicity, SNOMED, LOINC, ICD10CM, ICD9CM, ICD9Proc, CPT4, HCPCS, NDC, RxNorm, RxNorm Extension.<br>
 The required core vocabularies (Domain, Relationship, Vocabulary, Concept Class, CDM, Type Concept, UCUM, Visit Type, Drug Type, Procedure Type, Condition Type, etc.) are included by default in every package.<br>
-Before loading into the database unzip the downloaded archive into a convenient directory inside the HADES container (this will be referred to as _vocabFileLoc_). <br>
+
+Before loading into the database unzip the downloaded archive and put it into a convenient directory inside the HADES container (this will be referred to as _vocabFileLoc_). <br>
+
+```sch
+# find the container ID of the ohdsi/broadsea-hades container
+docker ps
+
+# copy your vocabulary folder into the container. Specify the local path and the container ID
+docker cp "</your_path/to/folder/with/vocabs>" <container_id>:/home/rstudio/vocabs
+
+# grant read and execute permissions
+docker exec -u 0 -it <container_id> bash -lc 'chmod -R a+rX /home/rstudio'
+```
+And run the commands in RStudio to import vocabularies into the database: <br>
 
 ```R
 library(readr)
 library(tools)
 library(dplyr)
 library(stringr)
-vocabFileLoc <- "/home/rstudio/vocab"    # path to vocabulary CSV files inside the HADES container
-vocabTables <- c(list.files("/home/rstudio/vocab")) 
+vocabFileLoc <- "/home/rstudio/vocabs"                                                    # path to vocabularies CSV files inside the HADES container
+vocabTables <- c(list.files("/home/rstudio/vocabs")) 
 
 for (table in vocabTables) {
     message("Table: ", table)
-  filepath <- file.path(vocabFileLoc, table)
-  df <- read_delim(filepath, delim = "\t", col_types = cols(.default = "c"))    # make sure to insert correct delimeter
-  # Identify and convert date columns (e.g., valid_start_date, etc.)
-  date_cols <- names(df)[str_detect(names(df), regex("date", ignore_case = TRUE))]
-  for (col in date_cols) {
-        df[[col]] <- as.Date(df[[col]], format = "%Y%m%d")
-  }
-  # Get table name without extension
-  tableName <- file_path_sans_ext(table)
-  DatabaseConnector::insertTable(
-    connection = conn,
-    tableName = paste0(cdmSchema, ".", tableName),
-    data = df,
-    dropTableIfExists = FALSE,
-    createTable = FALSE,
-    tempTable = FALSE
-  )
+    filepath <- file.path(vocabFileLoc, table)
+    df <- read_delim(filepath, delim = "\t", col_types = cols(.default = "c"))           # Set the correct delimiter
+
+    # date / datetime / time columns
+    date_cols     <- names(df)[str_detect(names(df), regex("date", ignore_case = TRUE)) &
+                               !str_detect(names(df), regex("datetime", ignore_case = TRUE))]
+    datetime_cols <- names(df)[str_detect(names(df), regex("datetime", ignore_case = TRUE))]
+    time_cols     <- names(df)[str_detect(names(df), regex("_time$", ignore_case = TRUE))]
+        
+    for (col in date_cols) {
+        df[[col]] <- as.Date(df[[col]], format = "%Y%m%d")                               # set the correct date format, e.g. "YYYYMMDD"
+    }
+
+    for (col in datetime_cols) {
+        df[[col]] <- as.POSIXct(df[[col]], format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")    # set the correct datetime format, e.g. "YYYY-MM-DDTHH:MM:SSZ (UTC)"
+    }
+
+    for (col in time_cols) {
+        n  <- suppressWarnings(as.numeric(df[[col]]))
+        out <- rep(NA_character_, length(n))
+        ok <- !is.na(n)
+        if (any(ok)) {
+            n2 <- n[ok] %% 86400
+            h <- floor(n2 / 3600)
+            m <- floor((n2 %% 3600) / 60)
+            s <- floor(n2 %% 60)
+            out[ok] <- sprintf("%02d:%02d:%02d", h, m, s)
+        }
+        df[[col]] <- out
+    }                                                                                    # set the correct time format, e.g. "numeric seconds since midnight to HH:MM:SS"
+    
+    tableName <- file_path_sans_ext(table)
+    DatabaseConnector::insertTable(
+        connection = conn,
+        tableName = paste0(cdmSchema, ".", tableName),
+        data = df,
+        dropTableIfExists = FALSE,
+        createTable = FALSE,
+        tempTable = FALSE
+    )
 }
 ```
 
-5. Download your CDM data.
-```
-#code here
-```
+6. Download your CDM data _(use the R script from the previous step as an example and adjust it to your CDM data format)_.
 
-6. Run Achilles and create table _concept_hierarchy_ as described in [steps 4-5](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema)
+7. Run Achilles and create table _concept_hierarchy_ as described in [steps 4-5](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema).
+
+8. Open [Atlas](http://127.0.0.1/atlas) to view the analysis dashboards.
