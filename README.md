@@ -75,9 +75,9 @@ docker exec -it broadsea-atlasdb psql -U postgres -c "DELETE FROM webapi.achille
 docker exec -it broadsea-atlasdb psql -U postgres -c "DELETE FROM webapi.cdm_cache      WHERE source_id=2;"
 docker restart ohdsi-webapi
 ```
-_where:_ 
+_meaning of the parameter:_ 
 ```R
-# source_id = 2  -  ID of the preloaded Eunomia analysis results in Atlas
+# source_id = 2  -    numeric ID of the preloaded Eunomia analysis results in Atlas
 ```
 
 4. Run Achilles: <br>
@@ -142,13 +142,22 @@ INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, tabl
 INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM53_RESULTS', 0);   "
 docker restart ohdsi-webapi
 ```
-_where:_  
+_meaning of the parameters:_  
 ```R
-# source_id = 3       - ID of the new analysis in Atlas
-# 'my-iris-new'       - name of the new analysis in Atlas
+# source_id = 3       - numeric ID of the new data source in ATLAS
+# 'my-iris-new'       - display name of the data source in ATLAS
+# 'IRIS-new'          - unique source_key for this data source
 # 'OMOPCDM53'         - schema with CDM data (e.g., preloaded Eunomia test dataset)
 # 'OMOPCDM53_RESULTS' - new result schema
 ```
+If a data source with the same name/IDs already exists, either register a new one with different source_id, source_name, source_key, and source_daimon_id values, or remove the existing entry first:
+```sch
+docker exec -it broadsea-atlasdb psql -U postgres -c "
+DELETE FROM webapi.source_daimon WHERE source_daimon_id IN (7, 8, 9);
+DELETE FROM webapi.source WHERE source_id IN (3);"
+```
+After deletion, run the registration commands again and restart ohdsi-webapi.
+
 2. Delete all logs and error reports in RStudio
  
 3. Set up IRIS connection and initialize schemas as described in [step 1](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema), updating __resultSchema__ beforehand: <br>
@@ -171,13 +180,22 @@ INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, tabl
 INSERT INTO webapi.source_daimon( source_daimon_id, source_id, daimon_type, table_qualifier, priority) VALUES (9, 3, 2, 'OMOPCDM54_RESULTS', 0);"
 docker restart ohdsi-webapi
 ```
-_where:_  
+_meaning of the parameters:_  
 ```R
-# source_id = 3       - ID of the new analysis in Atlas
-# 'my-iris-new'       - name of the new analysis in Atlas
+# source_id = 3       - numeric ID of the new data source in ATLAS
+# 'my-iris-new'       - display name of the data source in ATLAS
+# 'IRIS-new'          - unique source_key for this data source
 # 'OMOPCDM54'         - new CDM schema
 # 'OMOPCDM54_RESULTS' - new result schema
 ```
+If a data source with the same name/IDs already exists, either register a new one with different source_id, source_name, source_key, and source_daimon_id values, or remove the existing entry first:
+```sch
+docker exec -it broadsea-atlasdb psql -U postgres -c "
+DELETE FROM webapi.source_daimon WHERE source_daimon_id IN (7, 8, 9);
+DELETE FROM webapi.source WHERE source_id IN (3);"
+```
+After deletion, run the registration commands again and restart ohdsi-webapi.
+
 2. Delete all logs and error reports in RStudio.
    
 3. Set up IRIS connection and initialize schemas as described in [step 1](#re-run-achilles-on-the-same-dataset-in-the-current-result-schema), updating __cdm schema__ and  __result schema__ beforehand: <br>
