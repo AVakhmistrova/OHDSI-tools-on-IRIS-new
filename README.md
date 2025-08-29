@@ -82,11 +82,7 @@ _meaning of the parameter:_
 
 4. Run Achilles: <br>
 _(run the commands in RStudio)_
-```R
-# --- Temporary step, should be done in the preconfigured container ---
-remotes::install_github("OHDSI/SqlRender") 
-packageVersion("SqlRender") # v1.19.3
-          
+```R         
 # --- Ensure schema exists ---
 executeSql(conn, sprintf("CREATE SCHEMA IF NOT EXISTS %s;", resultsSchema))
 
