@@ -239,10 +239,10 @@ Before loading into the database unzip the downloaded archive and put it into a 
 docker ps
 
 # copy your vocabulary folder into the container. Specify the local path and the container ID
-docker cp "</your_path/to/folder/with/vocabs>" <container_id>:/home/uploads/vocabs
+docker cp "</your_path/to/folder/with/vocabs>" <container_id>:/home/rstudio/vocabs
 
 # grant read and execute permissions
-docker exec -u 0 -it <container_id> bash -lc 'chmod -R a+rX /home/uploads'
+docker exec -u 0 -it <container_id> bash -lc 'chmod -R a+rX /home/rstudio'
 ```
 And run the commands in RStudio to import vocabularies into the database: <br>
 
@@ -251,8 +251,8 @@ library(readr)
 library(tools)
 library(dplyr)
 library(stringr)
-vocabFileLoc <- "/home/uploads/vocabs"                                                    # path to vocabularies CSV files inside the HADES container
-vocabTables <- c(list.files("/home/uploads/vocabs")) 
+vocabFileLoc <- "/home/rstudio/vocabs"                                                    # path to vocabularies CSV files inside the HADES container
+vocabTables <- c(list.files("/home/rstudio/vocabs")) 
 
 for (table in vocabTables) {
     message("Table: ", table)
