@@ -229,7 +229,7 @@ Depending on your dataset, you may need to download additional vocabularies from
 
      ![Hades](athena_download.png)*Fig. 2. Download vocabularies from Athena*<br>
 
-__Note__: The Community Edition cannot store the full Athena vocabulary set. In most cases the following are sufficient: Gender, Race, Ethnicity, SNOMED, LOINC, ICD10CM, ICD9CM, ICD9Proc, CPT4, HCPCS, NDC, RxNorm, RxNorm Extension.<br>
+__Note__: The Community Edition cannot store the full Athena vocabulary set. In most cases the following are sufficient: Gender, Race, Ethnicity, SNOMED, LOINC, ICD10CM, ICD9CM, ICD9Proc, HCPCS, NDC, RxNorm, RxNorm Extension.<br>
 The required core vocabularies (Domain, Relationship, Vocabulary, Concept Class, CDM, Type Concept, UCUM, Visit Type, Drug Type, Procedure Type, Condition Type, etc.) are included by default in every package.<br>
 
 Before loading into the database unzip the downloaded archive and put it into a convenient directory inside the HADES container (this will be referred to as _vocabFileLoc_). <br>
